@@ -1,0 +1,246 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+
+% Color definitions
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+% Code listing style
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+\lstset{style=mystyle}
+
+% Header and footer
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{Handwritten Text OCR Project}
+\lhead{Project Report}
+\rfoot{Page \thepage}
+
+\title{\textbf{Handwritten Text OCR System with Dual AI Engines}\\
+\large Image to Word Document Converter}
+\author{PPIT Project}
+\date{January 2026}
+
+\begin{document}
+
+\maketitle
+\thispagestyle{empty}
+
+\begin{abstract}
+This report presents the development of an intelligent Optical Character Recognition (OCR) system that converts handwritten and printed text from images into formatted Word documents. The application features a dual-engine architecture supporting both Microsoft TrOCR (local processing) and Google Gemini AI (cloud-based API), giving users flexibility in choosing between privacy-focused local processing or fast cloud-based recognition. Built with a modern web interface using Streamlit, the system provides real-time image preprocessing, intelligent layout preservation, and seamless document generation capabilities.
+\end{abstract}
+
+\newpage
+\tableofcontents
+\newpage
+
+\section{Introduction}
+
+The project addresses the challenge of digitizing handwritten and printed text from images, a common need in education, research, and document management. Traditional OCR solutions often struggle with handwritten text or require expensive commercial licenses. This application provides a free, open-source solution with state-of-the-art AI capabilities.
+
+\subsection{Project Objectives}
+The main goals of this project were to:
+\begin{itemize}
+    \item Develop an accessible OCR system that accurately recognizes both handwritten and printed text
+    \item Implement multiple AI backends to provide users with flexibility and choice
+    \item Create an intuitive web interface that requires minimal technical knowledge
+    \item Preserve document layout and formatting during the conversion process
+    \item Ensure the system can run both offline (local AI) and online (cloud AI)
+\end{itemize}
+
+\section{System Architecture}
+
+The application follows a modular architecture with clear separation of concerns, organized into four main components:
+
+\subsection{Core OCR Engine}
+The \texttt{core/ocr\_engine.py} module serves as the intelligence layer of the application. It implements a flexible dual-engine system that can switch between Microsoft TrOCR and Google Gemini based on user preference. The engine handles image-to-text conversion, manages AI model loading and inference, and orchestrates the entire OCR pipeline from raw image input to structured text output.
+
+\subsection{Image Processing Utilities}
+The \texttt{utils/image\_processing.py} module provides sophisticated image preprocessing capabilities. This component enhances image quality before OCR by performing grayscale conversion, deskewing (rotation correction), noise removal using Non-Local Means Denoising, and adaptive thresholding for optimal text extraction.
+
+\subsection{Web Interface Layer}
+The \texttt{gui/streamlit\_app.py} module implements a modern, responsive web interface using Streamlit. This layer provides the user-facing components including file upload, image preview, OCR engine selection, real-time progress tracking, and document download functionality. The interface is designed to be intuitive for non-technical users while providing advanced options for power users.
+
+\subsection{Application Entry Point}
+The \texttt{main.py} script serves as the application launcher, initializing the Streamlit web server and managing the application lifecycle.
+
+\section{Technology Stack and AI Implementation}
+
+\subsection{Microsoft TrOCR Integration}
+Microsoft TrOCR represents the local AI solution in this dual-engine system. This transformer-based model (\texttt{microsoft/trocr-base-handwritten}) combines a Vision Transformer (ViT) encoder with a transformer decoder, specifically trained for handwritten text recognition. 
+
+The implementation breaks down images into text regions using OpenCV's contour detection, processes each region independently through the transformer model, and reconstructs the document layout by analyzing spatial relationships between regions. This approach ensures excellent accuracy for handwritten content while maintaining complete privacy since all processing occurs locally on the user's machine. The model is approximately 500MB and downloads automatically on first use.
+
+\subsection{Google Gemini Integration}
+Google Gemini (\texttt{gemini-2.0-flash-exp}) provides the cloud-based AI solution, offering advanced vision-language capabilities through Google's API. Unlike the region-by-region approach of TrOCR, Gemini processes the entire image at once, leveraging its understanding of document structure, layout, and context.
+
+The integration uses the official \texttt{google-genai} SDK with optimized prompts designed specifically for OCR tasks. The system converts uploaded images to bytes, sends them to Gemini with structured instructions for text extraction, and receives comprehensive text output that maintains document structure. This approach offers faster processing and superior handling of complex layouts, though it requires an internet connection and API authentication.
+
+\subsection{Environment Configuration}
+The application uses environment variables managed through \texttt{python-dotenv} for secure API key storage. The \texttt{.env} file stores the \texttt{GEMINI\_API\_KEY}, keeping sensitive credentials separate from the codebase and preventing accidental exposure in version control.
+
+\section{Key Features and Functionality}
+
+\subsection{Dual OCR Engine Support}
+The application's standout feature is its dual-engine architecture. Users can choose between Microsoft TrOCR for privacy-conscious local processing or Google Gemini for faster, cloud-based processing with superior layout understanding. The system dynamically loads the selected engine on demand, minimizing resource usage and startup time.
+
+\subsection{Intelligent Layout Preservation}
+Rather than simply extracting text sequentially, the system analyzes the spatial relationships between text regions. It detects paragraph boundaries based on vertical spacing, maintains line breaks and indentation patterns, and reconstructs the original document structure. This ensures the output Word document resembles the source image layout.
+
+\subsection{Image Preprocessing Pipeline}
+Before OCR processing, images can optionally pass through an enhancement pipeline that improves recognition accuracy. This includes rotation correction to handle skewed scans, noise reduction to remove artifacts and compression noise, and adaptive thresholding to create clean binary images optimal for text extraction.
+
+\subsection{Word Document Generation}
+The system generates professional Word documents using the \texttt{python-docx} library. Output documents feature proper paragraph formatting with Calibri 11pt font, standard 1-inch margins, preserved spacing between paragraphs, and correct line breaks matching the source layout.
+
+\subsection{User-Friendly Web Interface}
+The Streamlit-based interface provides drag-and-drop file upload, instant image preview with dimensions and file size, real-time progress indicators during processing, clear engine comparison information, and one-click document download after conversion.
+
+\section{Technical Implementation Highlights}
+
+\subsection{OCR Engine Abstraction}
+The \texttt{OCRConverter} class implements a clean abstraction that allows seamless switching between AI backends. The constructor accepts an \texttt{ocr\_engine} parameter ("microsoft" or "gemini"), and internal routing methods direct processing to the appropriate implementation. This design pattern makes it trivial to add additional OCR engines in the future.
+
+\subsection{Error Handling and Validation}
+Comprehensive error handling ensures robust operation across various scenarios. The system validates API key presence for Gemini, checks for model availability and successful loading, handles image format compatibility issues, provides clear error messages to users, and gracefully degrades functionality when dependencies are missing.
+
+\subsection{GPU Acceleration Support}
+When available, the Microsoft TrOCR implementation automatically utilizes CUDA-enabled GPUs through PyTorch. The system detects GPU availability at runtime and falls back to CPU processing when necessary, significantly improving processing speed on compatible hardware.
+
+\section{Project Structure and Organization}
+
+The codebase follows a clean, modular organization:
+
+\begin{verbatim}
+handwritten-text-ocr/
+├── main.py                    # Application entry point
+├── requirements.txt           # Python dependencies
+├── .env                       # API keys (secure storage)
+├── core/
+│   └── ocr_engine.py         # Dual OCR engine implementation
+├── utils/
+│   └── image_processing.py   # Preprocessing functions
+└── gui/
+    └── streamlit_app.py      # Web interface
+\end{verbatim}
+
+This structure ensures clear separation of concerns, easy navigation and maintenance, straightforward testing of individual components, and simple deployment to cloud platforms.
+
+\section{Deployment and Usage}
+
+\subsection{Installation Process}
+The application requires Python 3.8 or higher and can be installed with three simple commands: navigate to the project directory, install dependencies via \texttt{pip install -r requirements.txt}, and configure the Gemini API key in the \texttt{.env} file (optional, only for Gemini engine).
+
+\subsection{Running the Application}
+Users launch the web interface by executing \texttt{python main.py} or directly \texttt{streamlit run gui/streamlit\_app.py}. The application opens automatically in the default web browser at \texttt{localhost:8501}.
+
+\subsection{Typical User Workflow}
+A standard conversion session involves:
+\begin{enumerate}
+    \item Upload an image file (JPG, PNG, BMP, or TIFF)
+    \item Review the image preview and file information
+    \item Select the preferred OCR engine (Microsoft or Gemini)
+    \item Optionally enable image preprocessing
+    \item Click "Convert to Word" and wait for processing
+    \item Download the generated Word document
+\end{enumerate}
+
+\section{Dependencies and Technologies}
+
+The project leverages several key Python libraries:
+
+\begin{itemize}
+    \item \textbf{Streamlit}: Modern web framework for the user interface
+    \item \textbf{Transformers}: Hugging Face library providing TrOCR models
+    \item \textbf{PyTorch}: Deep learning framework for model inference
+    \item \textbf{python-docx}: Word document generation and manipulation
+    \item \textbf{OpenCV}: Image processing and text region detection
+    \item \textbf{Pillow}: Image loading and format handling
+    \item \textbf{google-genai}: Official Google Gemini SDK
+    \item \textbf{python-dotenv}: Secure environment variable management
+\end{itemize}
+
+\section{Comparative Analysis of OCR Engines}
+
+\subsection{Microsoft TrOCR}
+\textbf{Strengths:} Exceptional handwritten text recognition, complete privacy with local processing, no internet required, free without API limits, and deterministic results.
+
+\textbf{Limitations:} Initial model download of 500MB, moderate processing speed on CPU, higher memory usage, and simpler layout understanding.
+
+\subsection{Google Gemini}
+\textbf{Strengths:} Very fast processing through cloud API, superior layout comprehension, excellent with mixed content (handwritten and printed), smaller local footprint, and no model downloads needed.
+
+\textbf{Limitations:} Requires internet connectivity, needs API key configuration, sends data to external servers (privacy concerns), and subject to API rate limits and quotas.
+
+\section{Challenges and Solutions}
+
+\subsection{Model Loading Performance}
+\textit{Challenge:} TrOCR's large model size caused slow initial startup times.
+
+\textit{Solution:} Implemented lazy loading where models are only downloaded and loaded when the user selects the specific engine, significantly reducing initial startup time.
+
+\subsection{Layout Reconstruction}
+\textit{Challenge:} Maintaining document structure when text is extracted region-by-region.
+
+\textit{Solution:} Developed a spatial analysis algorithm that examines vertical spacing between regions to detect paragraph boundaries and preserve the original layout.
+
+\subsection{API Key Management}
+\textit{Challenge:} Securely storing Gemini API credentials without hardcoding.
+
+\textit{Solution:} Utilized \texttt{python-dotenv} with a \texttt{.env} file for configuration, keeping sensitive data separate from the codebase and enabling easy deployment across environments.
+
+\section{Future Enhancement Opportunities}
+
+While the current implementation is fully functional, several enhancements could be considered:
+
+\begin{itemize}
+    \item Support for multi-page documents and PDF input
+    \item Batch processing capabilities for multiple images
+    \item Advanced formatting options (font selection, size adjustment)
+    \item Table and structure detection for complex documents
+    \item Integration with additional OCR engines (Tesseract, AWS Textract)
+    \item Cloud deployment options (Streamlit Cloud, Heroku)
+    \item Support for additional output formats (PDF, plain text, Markdown)
+    \item User accounts and processing history tracking
+\end{itemize}
+
+\section{Conclusion}
+
+This project successfully demonstrates the integration of cutting-edge AI technologies into a practical, user-friendly application. By implementing a dual-engine architecture, the system provides users with genuine choice: local processing for privacy-conscious users or cloud processing for those prioritizing speed and advanced capabilities.
+
+The modular design ensures maintainability and extensibility, while the modern web interface makes the technology accessible to non-technical users. The project showcases effective integration of multiple AI APIs, thoughtful system architecture, and practical application of transformer-based models for real-world OCR tasks.
+
+The final product represents a production-ready solution that balances technical sophistication with usability, offering a compelling alternative to commercial OCR services while remaining completely open-source and customizable.
+
+\section*{Acknowledgments}
+
+This project utilizes the Microsoft TrOCR model developed by Microsoft Research and the Google Gemini AI model from Google DeepMind. The application is built on the Streamlit framework and leverages the extensive Python ecosystem for scientific computing and machine learning.
+
+\end{document}
