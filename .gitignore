@@ -48,3 +48,11 @@ samples/
 
 # Logs
 *.log
+
+# Environment variables and secrets
+.env
+.env.local
+.env.*.local
+
+# Streamlit secrets
+.streamlit/secrets.toml

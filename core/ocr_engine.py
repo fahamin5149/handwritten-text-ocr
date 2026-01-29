@@ -89,11 +89,27 @@ class OCRConverter:
     def _load_gemini_client(self) -> None:
         """Load Gemini API client."""
         try:
-            api_key = os.getenv("GEMINI_API_KEY")
+            # Try to get API key from Streamlit secrets first (for cloud deployment)
+            api_key = None
+            try:
+                import streamlit as st
+                if hasattr(st, 'secrets') and 'GEMINI_API_KEY' in st.secrets:
+                    api_key = st.secrets['GEMINI_API_KEY']
+                    print("Using Gemini API key from Streamlit secrets")
+            except (ImportError, FileNotFoundError):
+                pass
+            
+            # Fall back to environment variable (for local development)
+            if not api_key:
+                api_key = os.getenv("GEMINI_API_KEY")
+                if api_key:
+                    print("Using Gemini API key from .env file")
+            
             if not api_key or api_key == "your_gemini_api_key_here":
                 raise ValueError(
                     "Gemini API key not found or not configured.\n\n"
-                    "Please set GEMINI_API_KEY in your .env file.\n"
+                    "For local development: Set GEMINI_API_KEY in your .env file\n"
+                    "For Streamlit Cloud: Add GEMINI_API_KEY to Streamlit secrets\n"
                     "Get your API key from: https://aistudio.google.com/app/apikey"
                 )
             
@@ -105,7 +121,7 @@ class OCRConverter:
                 f"Failed to initialize Gemini client.\n\n"
                 f"Error: {str(e)}\n\n"
                 "Please ensure you have:\n"
-                "1. Set GEMINI_API_KEY in your .env file\n"
+                "1. Set GEMINI_API_KEY in Streamlit secrets (cloud) or .env file (local)\n"
                 "2. Installed google-genai: pip install google-genai"
             )
     
