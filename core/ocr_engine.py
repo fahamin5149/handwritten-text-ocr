@@ -1,5 +1,5 @@
 """
-OCR Engine using Microsoft TrOCR to extract text from handwritten and printed images.
+OCR Engine using Microsoft TrOCR and Google Gemini to extract text from handwritten and printed images.
 Converts images to structured Word documents with preserved formatting.
 """
 
@@ -15,8 +15,14 @@ import cv2
 import numpy as np
 from transformers import TrOCRProcessor, VisionEncoderDecoderModel
 import torch
+from google import genai
+from google.genai import types
+from dotenv import load_dotenv
 
 from utils.image_processing import preprocess_image
+
+# Load environment variables
+load_dotenv()
 
 
 # TrOCR Model Configuration
@@ -40,15 +46,27 @@ class TextRegion:
 
 class OCRConverter:
     """
-    Main OCR conversion class that handles image-to-Word conversion using TrOCR.
+    Main OCR conversion class that handles image-to-Word conversion using TrOCR or Gemini.
     """
     
-    def __init__(self):
-        """Initialize OCR converter with TrOCR model."""
+    def __init__(self, ocr_engine: str = "microsoft"):
+        """Initialize OCR converter with specified engine.
+        
+        Args:
+            ocr_engine: Either "microsoft" for TrOCR or "gemini" for Google Gemini
+        """
+        self.ocr_engine = ocr_engine.lower()
         self.processor = None
         self.model = None
+        self.gemini_client = None
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self._load_model()
+        
+        if self.ocr_engine == "microsoft":
+            self._load_model()
+        elif self.ocr_engine == "gemini":
+            self._load_gemini_client()
+        else:
+            raise ValueError(f"Unknown OCR engine: {ocr_engine}. Use 'microsoft' or 'gemini'.")
     
     def _load_model(self) -> None:
         """Load TrOCR model and processor."""
@@ -66,6 +84,29 @@ class OCRConverter:
                 "Please ensure you have installed all dependencies:\n"
                 "pip install transformers torch pillow\n\n"
                 "The model will be downloaded automatically on first run."
+            )
+    
+    def _load_gemini_client(self) -> None:
+        """Load Gemini API client."""
+        try:
+            api_key = os.getenv("GEMINI_API_KEY")
+            if not api_key or api_key == "your_gemini_api_key_here":
+                raise ValueError(
+                    "Gemini API key not found or not configured.\n\n"
+                    "Please set GEMINI_API_KEY in your .env file.\n"
+                    "Get your API key from: https://aistudio.google.com/app/apikey"
+                )
+            
+            print("Initializing Gemini client...")
+            self.gemini_client = genai.Client(api_key=api_key)
+            print("Gemini client initialized successfully!")
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to initialize Gemini client.\n\n"
+                f"Error: {str(e)}\n\n"
+                "Please ensure you have:\n"
+                "1. Set GEMINI_API_KEY in your .env file\n"
+                "2. Installed google-genai: pip install google-genai"
             )
     
     def convert_image_to_docx(
@@ -102,19 +143,30 @@ class OCRConverter:
                 progress_callback("Detecting text regions...")
             text_regions = self._detect_text_regions(image_path, preprocess)
             
-            # Extract text from each region using TrOCR
-            total_regions = len(text_regions)
-            for idx, region in enumerate(text_regions):
+            # Extract text from each region using selected OCR engine
+            if self.ocr_engine == "gemini":
+                # For Gemini, process the entire image at once
                 if progress_callback:
-                    progress_callback(f"Extracting text from region {idx + 1}/{total_regions}...")
-                
-                region_image = image.crop((
-                    region.x, 
-                    region.y, 
-                    region.x + region.width, 
-                    region.y + region.height
-                ))
-                region.text = self._extract_text_with_trocr(region_image)
+                    progress_callback("Extracting text with Gemini...")
+                full_text = self._extract_text_with_gemini(image)
+                # Create a single region with the full text
+                if text_regions:
+                    text_regions[0].text = full_text
+                    text_regions = [text_regions[0]]  # Use only the first region
+            else:
+                # For TrOCR, process each region separately
+                total_regions = len(text_regions)
+                for idx, region in enumerate(text_regions):
+                    if progress_callback:
+                        progress_callback(f"Extracting text from region {idx + 1}/{total_regions}...")
+                    
+                    region_image = image.crop((
+                        region.x, 
+                        region.y, 
+                        region.x + region.width, 
+                        region.y + region.height
+                    ))
+                    region.text = self._extract_text_with_trocr(region_image)
             
             # Generate Word document
             if progress_callback:
@@ -276,6 +328,48 @@ class OCRConverter:
             
         except Exception as e:
             print(f"Error extracting text with TrOCR: {str(e)}")
+            return ""
+    
+    def _extract_text_with_gemini(self, image: Image.Image) -> str:
+        """
+        Extract text from an image using Google Gemini.
+        
+        Args:
+            image: PIL Image object
+            
+        Returns:
+            Extracted text string
+        """
+        try:
+            # Convert PIL Image to bytes
+            import io
+            img_byte_arr = io.BytesIO()
+            image.save(img_byte_arr, format='PNG')
+            img_byte_arr = img_byte_arr.getvalue()
+            
+            # Create image part
+            image_part = types.Part.from_bytes(
+                data=img_byte_arr,
+                mime_type='image/png'
+            )
+            
+            # Create prompt for OCR
+            prompt = (
+                "Extract all the text from this image. "
+                "Preserve the layout and structure as much as possible. "
+                "Return only the extracted text, without any additional commentary or formatting."
+            )
+            
+            # Generate content
+            response = self.gemini_client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=[prompt, image_part]
+            )
+            
+            return response.text.strip()
+            
+        except Exception as e:
+            print(f"Error extracting text with Gemini: {str(e)}")
             return ""
     
     def _create_word_document(

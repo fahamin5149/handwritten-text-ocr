@@ -19,16 +19,24 @@ from core.ocr_engine import OCRConverter
 
 def init_session_state():
     """Initialize session state variables."""
+    if 'ocr_engine' not in st.session_state:
+        st.session_state.ocr_engine = "microsoft"  # Default engine
+    
     if 'ocr_converter' not in st.session_state:
-        with st.spinner("Loading TrOCR model... This may take a moment on first run."):
-            try:
-                st.session_state.ocr_converter = OCRConverter()
-            except RuntimeError as e:
-                st.error(f"❌ TrOCR Model Error: {str(e)}")
-                st.stop()
+        st.session_state.ocr_converter = None
     
     if 'output_file_path' not in st.session_state:
         st.session_state.output_file_path = None
+
+
+def load_ocr_converter(engine: str):
+    """Load OCR converter with specified engine."""
+    try:
+        with st.spinner(f"Loading {engine.upper()} OCR engine..."):
+            return OCRConverter(ocr_engine=engine)
+    except (RuntimeError, ValueError) as e:
+        st.error(f"❌ OCR Engine Error: {str(e)}")
+        return None
 
 
 def display_header():
@@ -44,7 +52,7 @@ def display_image_preview(uploaded_file):
         image = Image.open(uploaded_file)
         
         # Display image with max width
-        st.image(image, caption="Uploaded Image", use_container_width=True)
+        st.image(image, caption="Uploaded Image", width='stretch')
         
         # Display file info
         file_size = len(uploaded_file.getvalue()) / 1024  # KB
@@ -56,8 +64,12 @@ def display_image_preview(uploaded_file):
         return None
 
 
-def perform_conversion(uploaded_file, preprocess: bool):
+def perform_conversion(uploaded_file, preprocess: bool, ocr_converter):
     """Perform the OCR conversion."""
+    if not ocr_converter:
+        st.error("❌ OCR engine not loaded. Please check your configuration.")
+        return None, None
+    
     try:
         # Create temporary files for input and output
         with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(uploaded_file.name)[1]) as tmp_input:
@@ -88,7 +100,7 @@ def perform_conversion(uploaded_file, preprocess: bool):
                 progress_bar.progress(100, text=message)
         
         # Perform conversion
-        success = st.session_state.ocr_converter.convert_image_to_docx(
+        success = ocr_converter.convert_image_to_docx(
             tmp_input_path,
             tmp_output_path,
             preprocess=preprocess,
@@ -150,6 +162,23 @@ def main():
     with col2:
         st.header("⚙️ Controls")
         
+        # OCR Engine Selection
+        st.subheader("🤖 OCR Engine")
+        ocr_engine = st.radio(
+            "Select OCR Engine:",
+            options=["microsoft", "gemini"],
+            format_func=lambda x: "Microsoft TrOCR" if x == "microsoft" else "Google Gemini",
+            help="Microsoft TrOCR: Specialized model for handwritten text\nGoogle Gemini: Advanced multimodal AI with strong OCR capabilities",
+            horizontal=True
+        )
+        
+        # Load converter if engine changed or not loaded
+        if st.session_state.ocr_engine != ocr_engine or st.session_state.ocr_converter is None:
+            st.session_state.ocr_engine = ocr_engine
+            st.session_state.ocr_converter = load_ocr_converter(ocr_engine)
+        
+        st.markdown("---")
+        
         # Preprocessing option
         preprocess = st.checkbox(
             "Enable Image Preprocessing",
@@ -161,9 +190,14 @@ def main():
         
         # Convert button
         if uploaded_file is not None:
-            if st.button("🔄 Convert to Word", type="primary", use_container_width=True):
+            convert_disabled = st.session_state.ocr_converter is None
+            if st.button("🔄 Convert to Word", type="primary", width='stretch', disabled=convert_disabled):
                 with st.spinner("Converting..."):
-                    output_path, output_filename = perform_conversion(uploaded_file, preprocess)
+                    output_path, output_filename = perform_conversion(
+                        uploaded_file, 
+                        preprocess, 
+                        st.session_state.ocr_converter
+                    )
                     
                     if output_path and os.path.exists(output_path):
                         # Provide download button
@@ -173,10 +207,10 @@ def main():
                                 data=file,
                                 file_name=output_filename,
                                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                use_container_width=True
+                                width='stretch'
                             )
         else:
-            st.button("🔄 Convert to Word", disabled=True, use_container_width=True)
+            st.button("🔄 Convert to Word", disabled=True, width='stretch')
             st.caption("Upload an image first to enable conversion")
     
     # Sidebar with information
@@ -189,7 +223,11 @@ def main():
         - ✍️ Supports handwritten text
         - 🖨️ Supports printed text
         - 📐 Layout preservation
-        - 🎯 High accuracy with Microsoft TrOCR
+        - 🤖 Dual OCR engines: Microsoft TrOCR & Google Gemini
+        
+        **OCR Engines:**
+        - **Microsoft TrOCR**: Specialized model trained on handwritten text
+        - **Google Gemini**: Advanced multimodal AI with strong visual understanding
         
         **Supported Formats:**
         - PNG, JPG, JPEG
@@ -197,13 +235,14 @@ def main():
         
         **How to Use:**
         1. Upload an image file
-        2. (Optional) Enable preprocessing
-        3. Click "Convert to Word"
-        4. Download the generated document
+        2. Select OCR engine (Microsoft or Gemini)
+        3. (Optional) Enable preprocessing
+        4. Click "Convert to Word"
+        5. Download the generated document
         """)
         
         st.markdown("---")
-        st.caption("Powered by Microsoft TrOCR & Python-DOCX")
+        st.caption("Powered by Microsoft TrOCR, Google Gemini & Python-DOCX")
     
     # Footer
     st.markdown("---")
